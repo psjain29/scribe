@@ -95,9 +95,11 @@ Follow these steps to get SocialScribe running on your local machine.
 ### Setup Instructions
 
 1.  **Clone the Repository:**
+    First fork the repo https://github.com/atomkirk/scribe 
+    Next clone the repo locally, in below command  replace <userName> with your git repo user name
     ```bash
-    git clone https://github.com/fparadas/social_scribe.git 
-    cd social_scribe
+    git clone https://github.com/<userName>/scribe.git scribe
+    cd scribe
     ```
 
 2.  **Install Dependencies & Setup Database:**
