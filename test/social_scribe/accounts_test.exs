@@ -552,6 +552,86 @@ defmodule SocialScribe.AccountsTest do
     end
   end
 
+  describe "salesforce_credentials" do
+    test "find_or_create_salesforce_credential/2 creates a new credential when none exists" do
+      user = user_fixture()
+
+      attrs = %{
+        user_id: user.id,
+        provider: "salesforce",
+        uid: "00Dxx:005xx1",
+        external_account_id: "00Dxx:005xx1",
+        token: "salesforce_access_token",
+        refresh_token: "salesforce_refresh_token",
+        expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+        email: "user@salesforce.com",
+        metadata: %{
+          "instance_url" => "https://example.my.salesforce.com",
+          "id_url" => "https://login.salesforce.com/id/00Dxx/005xx1"
+        }
+      }
+
+      {:ok, credential} = Accounts.find_or_create_salesforce_credential(user, attrs)
+
+      assert credential.provider == "salesforce"
+      assert credential.external_account_id == "00Dxx:005xx1"
+      assert credential.metadata["instance_url"] == "https://example.my.salesforce.com"
+    end
+
+    test "find_or_create_salesforce_credential/2 updates by external_account_id" do
+      user = user_fixture()
+
+      existing_credential =
+        salesforce_credential_fixture(%{
+          user_id: user.id,
+          uid: "00Dxx:005xx1",
+          external_account_id: "00Dxx:005xx1",
+          token: "old_token",
+          refresh_token: "old_refresh"
+        })
+
+      attrs = %{
+        user_id: user.id,
+        provider: "salesforce",
+        uid: "00Dxx:005xx1",
+        external_account_id: "00Dxx:005xx1",
+        token: "new_token",
+        refresh_token: "new_refresh",
+        expires_at: DateTime.add(DateTime.utc_now(), 7200, :second),
+        email: "new_user@salesforce.com",
+        metadata: %{
+          "instance_url" => "https://new-instance.my.salesforce.com",
+          "id_url" => "https://login.salesforce.com/id/00Dxx/005xx1"
+        }
+      }
+
+      {:ok, updated_credential} = Accounts.find_or_create_salesforce_credential(user, attrs)
+
+      assert updated_credential.id == existing_credential.id
+      assert updated_credential.token == "new_token"
+
+      assert updated_credential.metadata["instance_url"] ==
+               "https://new-instance.my.salesforce.com"
+    end
+
+    test "find_or_create_salesforce_credential/2 returns error when external_account_id is missing" do
+      user = user_fixture()
+
+      attrs = %{
+        user_id: user.id,
+        provider: "salesforce",
+        uid: "00Dxx:005xx1",
+        token: "salesforce_access_token",
+        refresh_token: "salesforce_refresh_token",
+        expires_at: DateTime.add(DateTime.utc_now(), 3600, :second),
+        email: "user@salesforce.com"
+      }
+
+      assert {:error, :missing_external_account_id} =
+               Accounts.find_or_create_salesforce_credential(user, attrs)
+    end
+  end
+
   describe "facebook_page_credentials" do
     alias SocialScribe.Accounts.FacebookPageCredential
 

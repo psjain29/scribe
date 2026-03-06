@@ -20,7 +20,9 @@ defmodule SocialScribeWeb.UserSettingsLiveTest do
 
       assert has_element?(view, "h1", "User Settings")
       assert has_element?(view, "h2", "Connected Google Accounts")
+      assert has_element?(view, "h2", "Connected Salesforce Accounts")
       assert has_element?(view, "a", "Connect another Google Account")
+      assert has_element?(view, "a", "Connect Salesforce")
     end
 
     test "displays a message if no Google accounts are connected", %{conn: conn} do
@@ -47,6 +49,21 @@ defmodule SocialScribeWeb.UserSettingsLiveTest do
       assert has_element?(view, "li", "UID: google-uid-123")
       assert has_element?(view, "li", "(linked_account@example.com)")
       refute has_element?(view, "p", "You haven't connected any Google accounts yet.")
+    end
+
+    test "displays connected Salesforce accounts", %{conn: conn, user: user} do
+      _credential =
+        salesforce_credential_fixture(%{
+          user_id: user.id,
+          external_account_id: "00Dxx:005xx-demo",
+          email: "salesforce-linked@example.com"
+        })
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/settings")
+
+      assert has_element?(view, "li", "ID: 00Dxx:005xx-demo")
+      assert has_element?(view, "li", "(salesforce-linked@example.com)")
+      refute has_element?(view, "p", "You haven't connected any Salesforce accounts yet.")
     end
   end
 end

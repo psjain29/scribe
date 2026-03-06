@@ -99,6 +99,12 @@ config :ueberauth, Ueberauth,
       {Ueberauth.Strategy.Hubspot,
        [
          default_scope: "crm.objects.contacts.read crm.objects.contacts.write oauth"
+       ]},
+    salesforce:
+      {Ueberauth.Strategy.Salesforce,
+       [
+         default_scope: "api refresh_token",
+         prompt: "consent"
        ]}
   ]
 

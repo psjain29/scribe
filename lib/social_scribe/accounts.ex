@@ -310,10 +310,47 @@ defmodule SocialScribe.Accounts do
   end
 
   @doc """
+  Finds or creates a Salesforce credential for a user.
+  Salesforce credentials are scoped per connected external account.
+  """
+  def find_or_create_salesforce_credential(user, attrs) do
+    external_account_id =
+      Map.get(attrs, :external_account_id) ||
+        Map.get(attrs, "external_account_id")
+
+    if is_binary(external_account_id) and String.trim(external_account_id) != "" do
+      case Repo.get_by(UserCredential,
+             user_id: user.id,
+             provider: "salesforce",
+             external_account_id: external_account_id
+           ) do
+        nil ->
+          create_user_credential(attrs)
+
+        %UserCredential{} = credential ->
+          update_user_credential(credential, attrs)
+      end
+    else
+      {:error, :missing_external_account_id}
+    end
+  end
+
+  @doc """
   Gets the user's HubSpot credential if one exists.
   """
   def get_user_hubspot_credential(user_id) do
     Repo.get_by(UserCredential, user_id: user_id, provider: "hubspot")
+  end
+
+  @doc """
+  Lists all Salesforce credentials connected by a user.
+  """
+  def list_user_salesforce_credentials(user_id) do
+    from(c in UserCredential,
+      where: c.user_id == ^user_id and c.provider == "salesforce",
+      order_by: [asc: c.inserted_at]
+    )
+    |> Repo.all()
   end
 
   defp get_user_by_oauth_uid(provider, uid) do
