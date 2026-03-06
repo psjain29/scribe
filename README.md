@@ -95,11 +95,9 @@ Follow these steps to get SocialScribe running on your local machine.
 ### Setup Instructions
 
 1.  **Clone the Repository:**
-    First fork https://github.com/atomkirk/scribe then clone your repo locally
-    Note that in below command kindly replace userName with your own git user name
     ```bash
-    git clone https://github.com/<userName>/scribe.git
-    cd scribe
+    git clone https://github.com/fparadas/social_scribe.git 
+    cd social_scribe
     ```
 
 2.  **Install Dependencies & Setup Database:**
@@ -115,8 +113,8 @@ Follow these steps to get SocialScribe running on your local machine.
 
 3.  **Configure Environment Variables:**
     You'll need to set up several API keys and OAuth credentials.
-        * Copy the example environment file (if one is provided, e.g., `.env.example`) to `.env`.
-        * Edit the `.env` file (or set environment variables directly) with your actual credentials:
+    * Copy the example environment file (if one is provided, e.g., `.env.example`) to `.env`.
+    * Edit the `.env` file (or set environment variables directly) with your actual credentials:
         * `GOOGLE_CLIENT_ID`: Your Google OAuth Client ID.
         * `GOOGLE_CLIENT_SECRET`: Your Google OAuth Client Secret.
         * `GOOGLE_REDIRECT_URI`: `"http://localhost:4000/auth/google/callback"`
