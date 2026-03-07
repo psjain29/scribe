@@ -292,19 +292,28 @@ defmodule SocialScribeWeb.AuthController do
   # Converts Ueberauth error structs into a compact message string.
   defp format_ueberauth_errors(%{errors: errors}) when is_list(errors) do
     errors
-    |> Enum.map(fn error ->
-      message = error[:message] || error.message || ""
-      key = error[:message_key] || error.message_key || ""
-
-      cond do
-        message != "" -> message
-        key != "" -> to_string(key)
-        true -> ""
-      end
-    end)
+    |> Enum.map(&format_ueberauth_error/1)
     |> Enum.reject(&(&1 == ""))
     |> Enum.join(", ")
   end
 
   defp format_ueberauth_errors(_failure), do: ""
+
+  defp format_ueberauth_error(%{message: message}) when is_binary(message) and message != "",
+    do: message
+
+  defp format_ueberauth_error(%{message_key: key}) when not is_nil(key), do: to_string(key)
+
+  defp format_ueberauth_error(%{"message" => message}) when is_binary(message) and message != "",
+    do: message
+
+  defp format_ueberauth_error(%{"message_key" => key}) when not is_nil(key), do: to_string(key)
+
+  defp format_ueberauth_error(error) when is_struct(error) do
+    error
+    |> Map.from_struct()
+    |> format_ueberauth_error()
+  end
+
+  defp format_ueberauth_error(_), do: ""
 end
