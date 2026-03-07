@@ -12,6 +12,12 @@ defmodule SocialScribeWeb.AuthController do
 
   require Logger
 
+  @sf_authorization_denied_message "Could not connect to Salesforce: Authorization was denied. Please try again and click Allow if you consent."
+  @sf_callback_invalid_message "Could not connect to Salesforce: Connection callback was invalid or incomplete. Please try again from Settings."
+  @sf_session_invalid_message "Could not connect to Salesforce: Your connection session expired or was invalid. Please try connecting again."
+  @sf_token_exchange_failed_message "Could not connect to Salesforce: We could not complete the secure token exchange. Please reconnect and try again."
+  @sf_fallback_message "Could not connect to Salesforce: An unexpected error occurred. Please try again."
+
   @doc """
   Handles the initial request to the provider (e.g., Google).
   Ueberauth's plug will redirect the user to the provider's consent page.
@@ -173,15 +179,18 @@ defmodule SocialScribeWeb.AuthController do
     end
   end
 
-  def callback(%{assigns: %{ueberauth_failure: failure, current_user: user}} = conn, %{
-        "provider" => provider
-      })
+  def callback(
+        %{assigns: %{ueberauth_failure: failure, current_user: user}} = conn,
+        %{
+          "provider" => provider
+        } = params
+      )
       when not is_nil(user) and
              provider in ["google", "linkedin", "facebook", "hubspot", "salesforce"] do
     Logger.error("OAuth failure for connected provider #{provider}: #{inspect(failure)}")
 
     conn
-    |> put_flash(:error, oauth_failure_message(provider, failure))
+    |> put_flash(:error, oauth_failure_message(provider, failure, params))
     |> redirect(to: ~p"/dashboard/settings")
   end
 
@@ -278,7 +287,11 @@ defmodule SocialScribeWeb.AuthController do
   end
 
   # Keeps provider failure messages short and user-actionable.
-  defp oauth_failure_message(provider, failure) do
+  defp oauth_failure_message("salesforce", failure, params) do
+    salesforce_oauth_failure_message(failure, params)
+  end
+
+  defp oauth_failure_message(provider, failure, _params) do
     provider_name = String.capitalize(provider)
     details = format_ueberauth_errors(failure)
 
@@ -316,4 +329,50 @@ defmodule SocialScribeWeb.AuthController do
   end
 
   defp format_ueberauth_error(_), do: ""
+
+  defp salesforce_oauth_failure_message(failure, params) do
+    keys = oauth_failure_keys(failure)
+
+    cond do
+      "access_denied" in keys ->
+        @sf_authorization_denied_message
+
+      "missing_code" in keys ->
+        @sf_callback_invalid_message
+
+      "csrf_attack" in keys and Map.has_key?(params, "state") ->
+        @sf_session_invalid_message
+
+      "csrf_attack" in keys ->
+        @sf_callback_invalid_message
+
+      Enum.any?(
+        keys,
+        &(&1 in ["invalid_client", "invalid_client_id", "invalid_grant", "identity_error"])
+      ) ->
+        @sf_token_exchange_failed_message
+
+      true ->
+        @sf_fallback_message
+    end
+  end
+
+  defp oauth_failure_keys(%{errors: errors}) when is_list(errors) do
+    errors
+    |> Enum.map(&oauth_failure_key/1)
+    |> Enum.reject(&is_nil/1)
+  end
+
+  defp oauth_failure_keys(_), do: []
+
+  defp oauth_failure_key(%{message_key: key}) when is_binary(key), do: key
+  defp oauth_failure_key(%{"message_key" => key}) when is_binary(key), do: key
+
+  defp oauth_failure_key(error) when is_struct(error) do
+    error
+    |> Map.from_struct()
+    |> oauth_failure_key()
+  end
+
+  defp oauth_failure_key(_), do: nil
 end
