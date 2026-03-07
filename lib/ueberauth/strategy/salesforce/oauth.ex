@@ -1,6 +1,6 @@
 defmodule Ueberauth.Strategy.Salesforce.OAuth do
   @moduledoc """
-  OAuth2 helper for Salesforce.
+  OAuth2 client helper for Salesforce authorization/token endpoints.
   """
 
   use OAuth2.Strategy
@@ -12,6 +12,9 @@ defmodule Ueberauth.Strategy.Salesforce.OAuth do
     token_url: "/services/oauth2/token"
   ]
 
+  @doc """
+  Builds the OAuth2 client using runtime Salesforce configuration.
+  """
   def client(opts \\ []) do
     config = Application.get_env(:ueberauth, __MODULE__, [])
 
@@ -26,12 +29,18 @@ defmodule Ueberauth.Strategy.Salesforce.OAuth do
     |> OAuth2.Client.put_serializer("application/json", json_library)
   end
 
+  @doc """
+  Generates Salesforce authorization URL.
+  """
   def authorize_url!(params \\ [], opts \\ []) do
     opts
     |> client()
     |> OAuth2.Client.authorize_url!(params)
   end
 
+  @doc """
+  Exchanges authorization code for access/refresh tokens.
+  """
   def get_access_token(params \\ [], opts \\ []) do
     config = Application.get_env(:ueberauth, __MODULE__, [])
 
@@ -61,6 +70,9 @@ defmodule Ueberauth.Strategy.Salesforce.OAuth do
     end
   end
 
+  @doc """
+  Fetches Salesforce identity payload from token `id` endpoint.
+  """
   def get_identity(%OAuth2.AccessToken{} = token) do
     identity_url = token.other_params["id"]
 
@@ -93,6 +105,7 @@ defmodule Ueberauth.Strategy.Salesforce.OAuth do
     |> OAuth2.Strategy.AuthCode.get_token(params, headers)
   end
 
+  # Uses bearer auth for identity endpoint calls.
   defp http_client(access_token) do
     Tesla.client([
       Tesla.Middleware.JSON,
@@ -100,6 +113,7 @@ defmodule Ueberauth.Strategy.Salesforce.OAuth do
     ])
   end
 
+  # Builds a stable external account key for multi-connection support.
   defp external_account_id(%{"organization_id" => org_id, "user_id" => user_id})
        when is_binary(org_id) and is_binary(user_id) do
     "#{org_id}:#{user_id}"

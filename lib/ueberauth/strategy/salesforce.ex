@@ -1,6 +1,6 @@
 defmodule Ueberauth.Strategy.Salesforce do
   @moduledoc """
-  Salesforce strategy for Ueberauth.
+  Ueberauth strategy for connecting Salesforce accounts.
   """
 
   use Ueberauth.Strategy,
@@ -13,6 +13,9 @@ defmodule Ueberauth.Strategy.Salesforce do
   alias Ueberauth.Auth.Info
   alias Ueberauth.Strategy.Salesforce.OAuth
 
+  @doc """
+  Starts Salesforce OAuth request flow with state protection.
+  """
   def handle_request!(conn) do
     scopes = conn.params["scope"] || option(conn, :default_scope)
 
@@ -26,6 +29,11 @@ defmodule Ueberauth.Strategy.Salesforce do
 
     redirect!(conn, OAuth.authorize_url!(opts))
   end
+
+  @doc """
+  Handles Salesforce callback outcomes: provider error, code exchange, or missing code.
+  """
+  def handle_callback!(conn)
 
   def handle_callback!(%Plug.Conn{params: %{"error" => error} = params} = conn) do
     description = params["error_description"] || "Authorization failed"
@@ -48,12 +56,18 @@ defmodule Ueberauth.Strategy.Salesforce do
     set_errors!(conn, [error("missing_code", "No code received from Salesforce")])
   end
 
+  @doc """
+  Clears strategy-private token/user payloads from the connection.
+  """
   def handle_cleanup!(conn) do
     conn
     |> put_private(:salesforce_token, nil)
     |> put_private(:salesforce_user, nil)
   end
 
+  @doc """
+  Returns stable account UID used by Ueberauth auth struct.
+  """
   def uid(conn) do
     uid_field =
       conn
@@ -63,6 +77,9 @@ defmodule Ueberauth.Strategy.Salesforce do
     conn.private.salesforce_user[uid_field]
   end
 
+  @doc """
+  Maps OAuth token payload into Ueberauth credentials struct.
+  """
   def credentials(conn) do
     token = conn.private.salesforce_token
 
@@ -76,6 +93,9 @@ defmodule Ueberauth.Strategy.Salesforce do
     }
   end
 
+  @doc """
+  Builds user-facing account info for persistence and display.
+  """
   def info(conn) do
     user = conn.private.salesforce_user
     email = user["email"] || user["preferred_username"]
@@ -87,6 +107,9 @@ defmodule Ueberauth.Strategy.Salesforce do
     }
   end
 
+  @doc """
+  Exposes raw token and identity payload for downstream use.
+  """
   def extra(conn) do
     %Extra{
       raw_info: %{
@@ -96,6 +119,7 @@ defmodule Ueberauth.Strategy.Salesforce do
     }
   end
 
+  # Fetches Salesforce identity after token exchange and stores it in conn.
   defp fetch_user(conn, token) do
     conn = put_private(conn, :salesforce_token, token)
 
@@ -108,10 +132,12 @@ defmodule Ueberauth.Strategy.Salesforce do
     end
   end
 
+  # Merges runtime query params into request options.
   defp with_param(opts, key, conn) do
     if value = conn.params[to_string(key)], do: Keyword.put(opts, key, value), else: opts
   end
 
+  # Applies configured strategy options when present.
   defp with_optional(opts, key, conn) do
     if option(conn, key), do: Keyword.put(opts, key, option(conn, key)), else: opts
   end

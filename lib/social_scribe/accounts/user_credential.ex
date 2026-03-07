@@ -1,4 +1,8 @@
 defmodule SocialScribe.Accounts.UserCredential do
+  @moduledoc """
+  Persists OAuth credentials for social and CRM provider connections.
+  """
+
   use Ecto.Schema
   import Ecto.Changeset
 
@@ -17,7 +21,9 @@ defmodule SocialScribe.Accounts.UserCredential do
     timestamps(type: :utc_datetime)
   end
 
-  @doc false
+  @doc """
+  Builds the base credential changeset used by provider upserts.
+  """
   def changeset(user_credential, attrs) do
     changeset =
       user_credential
@@ -41,12 +47,16 @@ defmodule SocialScribe.Accounts.UserCredential do
     )
   end
 
+  @doc """
+  Backward-compatible changeset kept for legacy LinkedIn flows.
+  """
   def linkedin_changeset(user_credential, attrs) do
     user_credential
     |> cast(attrs, [:provider, :uid, :token, :refresh_token, :expires_at, :user_id, :email])
     |> validate_required([:provider, :uid, :token, :expires_at, :user_id, :email])
   end
 
+  # Ensure downstream code always receives a map for metadata.
   defp normalize_metadata(nil), do: %{}
   defp normalize_metadata(metadata) when is_map(metadata), do: metadata
   defp normalize_metadata(_metadata), do: %{}

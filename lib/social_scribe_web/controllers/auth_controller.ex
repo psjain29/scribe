@@ -1,4 +1,8 @@
 defmodule SocialScribeWeb.AuthController do
+  @moduledoc """
+  Handles OAuth request/callback flows for sign-in and provider connections.
+  """
+
   use SocialScribeWeb, :controller
 
   alias SocialScribe.FacebookApi
@@ -17,7 +21,7 @@ defmodule SocialScribeWeb.AuthController do
   end
 
   @doc """
-  Handles the callback from the provider after the user has granted consent.
+  Handles OAuth callbacks for login and connected account flows.
   """
   def callback(%{assigns: %{ueberauth_auth: auth, current_user: user}} = conn, %{
         "provider" => "google"
@@ -219,6 +223,7 @@ defmodule SocialScribeWeb.AuthController do
     |> redirect(to: ~p"/")
   end
 
+  # Builds validated persistence attrs from Salesforce OAuth payload.
   defp salesforce_credential_attrs(user, auth) do
     raw_info = if(auth.extra && auth.extra.raw_info, do: auth.extra.raw_info, else: %{})
     raw_user = raw_info[:user] || raw_info["user"] || %{}
@@ -256,6 +261,7 @@ defmodule SocialScribeWeb.AuthController do
     end
   end
 
+  # Derives a stable account key used for multi-account uniqueness.
   defp salesforce_external_account_id(raw_user) do
     with org when is_binary(org) <- raw_user["organization_id"],
          user_id when is_binary(user_id) <- raw_user["user_id"] do
@@ -265,11 +271,13 @@ defmodule SocialScribeWeb.AuthController do
     end
   end
 
+  # Uses provider email when present, then a deterministic fallback.
   defp salesforce_email(auth, raw_user, external_account_id) do
     auth.info.email || raw_user["email"] || raw_user["preferred_username"] ||
       "salesforce-#{external_account_id}@local.invalid"
   end
 
+  # Keeps provider failure messages short and user-actionable.
   defp oauth_failure_message(provider, failure) do
     provider_name = String.capitalize(provider)
     details = format_ueberauth_errors(failure)
@@ -281,6 +289,7 @@ defmodule SocialScribeWeb.AuthController do
     end
   end
 
+  # Converts Ueberauth error structs into a compact message string.
   defp format_ueberauth_errors(%{errors: errors}) when is_list(errors) do
     errors
     |> Enum.map(fn error ->
