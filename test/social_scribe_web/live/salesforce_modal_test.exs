@@ -54,17 +54,10 @@ defmodule SocialScribeWeb.SalesforceModalTest do
       assert html =~ "alex.taylor@example.test"
     end
 
-    test "single-character search triggers contact lookup", %{conn: conn, meeting: meeting} do
-      contacts = [
-        %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
-      ]
-
-      SocialScribe.SalesforceApiMock
-      |> expect(:search_contacts, fn _credential, query ->
-        assert query == "A"
-        {:ok, contacts}
-      end)
-
+    test "single-character input shows helper text and does not query API", %{
+      conn: conn,
+      meeting: meeting
+    } do
       {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
 
       view
@@ -73,7 +66,7 @@ defmodule SocialScribeWeb.SalesforceModalTest do
 
       :timer.sleep(200)
 
-      assert render(view) =~ "Alex Taylor"
+      assert render(view) =~ "Please enter at least 2 characters to search."
     end
 
     test "selecting a contact fetches details and renders pending rows", %{

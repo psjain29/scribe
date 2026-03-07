@@ -9,7 +9,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
   use SocialScribeWeb, :live_component
 
   import SocialScribeWeb.ModalComponents
-  @min_query_length 1
+  @min_query_length 2
 
   @impl true
   def update(assigns, socket) do
@@ -33,6 +33,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
   def render(assigns) do
     assigns = assign(assigns, :patch, ~p"/dashboard/meetings/#{assigns.meeting}")
     assigns = assign(assigns, :selected_count, Enum.count(assigns.pending_rows, & &1.apply))
+    assigns = assign(assigns, :min_query_length, @min_query_length)
 
     ~H"""
     <div class="space-y-6">
@@ -51,6 +52,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
         contacts={@contacts}
         loading={@searching}
         loading_contact={@loading_contact}
+        min_query_length={@min_query_length}
         open={@dropdown_open}
         query={@query}
         target={@myself}
@@ -162,6 +164,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
   attr :contacts, :list, default: []
   attr :loading, :boolean, default: false
   attr :loading_contact, :boolean, default: false
+  attr :min_query_length, :integer, default: 2
   attr :open, :boolean, default: false
   attr :query, :string, default: ""
   attr :target, :any, default: nil
@@ -256,7 +259,20 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
           </div>
 
           <div
-            :if={!@loading && Enum.empty?(@contacts) && @query != ""}
+            :if={
+              !@loading && Enum.empty?(@contacts) &&
+                String.length(String.trim(@query)) < @min_query_length && @query != ""
+            }
+            class="px-4 py-2 text-sm text-gray-500"
+          >
+            Please enter at least {@min_query_length} characters to search.
+          </div>
+
+          <div
+            :if={
+              !@loading && Enum.empty?(@contacts) &&
+                String.length(String.trim(@query)) >= @min_query_length
+            }
             class="px-4 py-2 text-sm text-gray-500"
           >
             No contacts found
