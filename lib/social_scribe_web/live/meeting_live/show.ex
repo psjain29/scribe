@@ -8,8 +8,23 @@ defmodule SocialScribeWeb.MeetingLive.Show do
   alias SocialScribe.Meetings
   alias SocialScribe.Automations
   alias SocialScribe.Accounts
+  alias SocialScribe.CRM
   alias SocialScribe.HubspotApiBehaviour, as: HubspotApi
   alias SocialScribe.HubspotSuggestions
+
+  @salesforce_pending_fields [
+    {"firstname", "First Name", :firstname},
+    {"lastname", "Last Name", :lastname},
+    {"email", "Email", :email},
+    {"phone", "Phone", :phone},
+    {"mobilephone", "Mobile Phone", :mobilephone},
+    {"title", "Title", :title},
+    {"mailing_street", "Mailing Street", :mailing_street},
+    {"mailing_city", "Mailing City", :mailing_city},
+    {"mailing_state", "Mailing State", :mailing_state},
+    {"mailing_postal_code", "Mailing Postal Code", :mailing_postal_code},
+    {"mailing_country", "Mailing Country", :mailing_country}
+  ]
 
   @impl true
   def mount(%{"id" => meeting_id}, _session, socket) do
@@ -32,6 +47,11 @@ defmodule SocialScribeWeb.MeetingLive.Show do
     else
       hubspot_credential = Accounts.get_user_hubspot_credential(socket.assigns.current_user.id)
 
+      salesforce_credential =
+        socket.assigns.current_user.id
+        |> Accounts.list_user_salesforce_credentials()
+        |> List.first()
+
       socket =
         socket
         |> assign(:page_title, "Meeting Details: #{meeting.title}")
@@ -39,6 +59,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
         |> assign(:automation_results, automation_results)
         |> assign(:user_has_automations, user_has_automations)
         |> assign(:hubspot_credential, hubspot_credential)
+        |> assign(:salesforce_credential, salesforce_credential)
         |> assign(
           :follow_up_email_form,
           to_form(%{
@@ -142,6 +163,74 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
         {:noreply, socket}
     end
+  end
+
+  @impl true
+  def handle_info({:salesforce_search, query, credential}, socket) do
+    case CRM.search_contacts(credential, query) do
+      {:ok, contacts} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          contacts: contacts,
+          searching: false,
+          error: nil
+        )
+
+      {:error, _reason} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          contacts: [],
+          searching: false,
+          error: "Failed to search Salesforce contacts. Please try again."
+        )
+    end
+
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:salesforce_load_contact, contact_id, credential}, socket) do
+    case CRM.get_contact(credential, contact_id) do
+      {:ok, contact} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          selected_contact: contact,
+          pending_rows: build_salesforce_pending_rows(contact),
+          loading_contact: false,
+          error: nil
+        )
+
+      {:error, :not_found} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          loading_contact: false,
+          error: "That Salesforce contact could not be found. Please select another contact."
+        )
+
+      {:error, _reason} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          loading_contact: false,
+          error: "Failed to load Salesforce contact details. Please try again."
+        )
+    end
+
+    {:noreply, socket}
+  end
+
+  # Builds deterministic pending rows for the Salesforce review modal.
+  defp build_salesforce_pending_rows(contact) do
+    Enum.map(@salesforce_pending_fields, fn {field, label, contact_key} ->
+      %{
+        field: field,
+        label: label,
+        existing_value: Map.get(contact, contact_key),
+        suggested_value: nil,
+        reason: nil,
+        apply: false,
+        status: :pending
+      }
+    end)
   end
 
   defp normalize_contact(contact) do
