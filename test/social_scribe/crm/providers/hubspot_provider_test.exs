@@ -14,7 +14,9 @@ defmodule SocialScribe.CRM.Providers.HubspotProviderTest do
     %{credential: credential}
   end
 
-  test "HubspotProvider.search_contacts/2 delegates to HubspotApiBehaviour", %{credential: credential} do
+  test "HubspotProvider.search_contacts/2 delegates to HubspotApiBehaviour", %{
+    credential: credential
+  } do
     expected = [%{id: "1", firstname: "Jane", lastname: "Doe"}]
 
     SocialScribe.HubspotApiMock
@@ -36,7 +38,9 @@ defmodule SocialScribe.CRM.Providers.HubspotProviderTest do
     assert {:ok, ^expected} = HubspotProvider.get_contact(credential, "123")
   end
 
-  test "HubspotProvider.update_contact/3 delegates to HubspotApiBehaviour", %{credential: credential} do
+  test "HubspotProvider.update_contact/3 delegates to HubspotApiBehaviour", %{
+    credential: credential
+  } do
     updates = %{"phone" => "555-111-2222"}
     expected = %{id: "123", phone: "555-111-2222"}
 
@@ -60,9 +64,9 @@ defmodule SocialScribe.CRM.Providers.HubspotProviderTest do
   end
 
   test "CRM dispatcher returns unsupported provider error" do
-    credential = %UserCredential{provider: "salesforce", token: "token", uid: "sf_123"}
+    credential = %UserCredential{provider: "unknown", token: "token", uid: "sf_123"}
 
-    assert {:error, {:unsupported_provider, "salesforce"}} =
+    assert {:error, {:unsupported_provider, "unknown"}} =
              CRM.search_contacts(credential, "john")
   end
 end
