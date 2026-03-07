@@ -175,7 +175,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
     ~H"""
     <div class="space-y-1">
       <label for={"#{@id}-input"} class="block text-sm font-medium text-slate-700">
-        Select Contact
+        Select Contact (Please start typing first 2 characters)
       </label>
       <div class="relative">
         <%= if @selected_contact do %>
