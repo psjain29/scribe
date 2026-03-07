@@ -9,6 +9,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
   use SocialScribeWeb, :live_component
 
   import SocialScribeWeb.ModalComponents
+  @min_query_length 1
 
   @impl true
   def update(assigns, socket) do
@@ -88,7 +89,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
   def handle_event("contact_search", %{"value" => query}, socket) do
     trimmed_query = String.trim(query)
 
-    if String.length(trimmed_query) >= 2 do
+    if String.length(trimmed_query) >= @min_query_length do
       send(self(), {:salesforce_search, trimmed_query, socket.assigns.credential})
 
       {:noreply,

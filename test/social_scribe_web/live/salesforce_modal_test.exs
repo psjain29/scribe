@@ -54,6 +54,28 @@ defmodule SocialScribeWeb.SalesforceModalTest do
       assert html =~ "alex.taylor@example.test"
     end
 
+    test "single-character search triggers contact lookup", %{conn: conn, meeting: meeting} do
+      contacts = [
+        %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
+      ]
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _credential, query ->
+        assert query == "A"
+        {:ok, contacts}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "A"})
+
+      :timer.sleep(200)
+
+      assert render(view) =~ "Alex Taylor"
+    end
+
     test "selecting a contact fetches details and renders pending rows", %{
       conn: conn,
       meeting: meeting
