@@ -316,6 +316,31 @@ defmodule SocialScribeWeb.SalesforceModalTest do
       assert html =~ "Failed to search Salesforce contacts. Please try again."
       assert has_element?(view, "input[phx-keyup='contact_search']")
     end
+
+    test "shows inline error for malformed Salesforce search response", %{
+      conn: conn,
+      meeting: meeting
+    } do
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _credential, _query ->
+        {:error, {:malformed_response, %{"unexpected" => [%{"id" => "0031"}]}}}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "Alex"})
+
+      :timer.sleep(200)
+
+      html = render(view)
+
+      assert html =~
+               "Salesforce returned an unexpected contact search response. Please try again."
+
+      assert has_element?(view, "input[phx-keyup='contact_search']")
+    end
   end
 
   describe "Salesforce Modal without credential" do

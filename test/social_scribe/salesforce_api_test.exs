@@ -59,6 +59,41 @@ defmodule SocialScribe.SalesforceApiTest do
              SalesforceApi.search_contacts(credential, "o'hara")
   end
 
+  test "search_contacts/2 treats empty 200 body as no contacts" do
+    credential = salesforce_credential_fixture()
+
+    mock(fn
+      %{method: :get, url: "https://example.my.salesforce.com/services/data/v61.0/search"} ->
+        %Tesla.Env{status: 200, body: %{}}
+    end)
+
+    assert {:ok, []} = SalesforceApi.search_contacts(credential, "alex")
+  end
+
+  test "search_contacts/2 returns malformed_response for non-empty malformed 200 body" do
+    credential = salesforce_credential_fixture()
+
+    body = %{"unexpected" => [%{"id" => "0031"}]}
+
+    mock(fn
+      %{method: :get, url: "https://example.my.salesforce.com/services/data/v61.0/search"} ->
+        %Tesla.Env{status: 200, body: body}
+    end)
+
+    assert {:error, {:malformed_response, ^body}} =
+             SalesforceApi.search_contacts(credential, "alex")
+
+    bad_shape_body = %{"searchRecords" => %{"Id" => "0031"}}
+
+    mock(fn
+      %{method: :get, url: "https://example.my.salesforce.com/services/data/v61.0/search"} ->
+        %Tesla.Env{status: 200, body: bad_shape_body}
+    end)
+
+    assert {:error, {:malformed_response, ^bad_shape_body}} =
+             SalesforceApi.search_contacts(credential, "alex")
+  end
+
   test "search_contacts/2 refreshes token and retries once after 401" do
     credential =
       salesforce_credential_fixture(%{

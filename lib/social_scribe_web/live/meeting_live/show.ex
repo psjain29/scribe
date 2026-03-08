@@ -205,6 +205,14 @@ defmodule SocialScribeWeb.MeetingLive.Show do
           error: nil
         )
 
+      {:error, {:malformed_response, _body}} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          contacts: [],
+          searching: false,
+          error: "Salesforce returned an unexpected contact search response. Please try again."
+        )
+
       {:error, _reason} ->
         send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
           id: "salesforce-modal",

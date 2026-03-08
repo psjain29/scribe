@@ -57,8 +57,8 @@ defmodule SocialScribe.SalesforceApi do
           sosl = sosl_query(query)
 
           case Tesla.get(client(base_url, cred.token), data_path("/search"), query: [q: sosl]) do
-            {:ok, %Tesla.Env{status: 200, body: %{"searchRecords" => records}}} ->
-              {:ok, Enum.map(records, &format_search_contact/1)}
+            {:ok, %Tesla.Env{status: 200, body: body}} ->
+              parse_search_contacts(body)
 
             {:ok, %Tesla.Env{status: status, body: body}} ->
               {:error, {:api_error, status, body}}
@@ -217,6 +217,18 @@ defmodule SocialScribe.SalesforceApi do
 
   defp data_path(path) do
     "/services/data/#{api_version()}#{path}"
+  end
+
+  defp parse_search_contacts(%{"searchRecords" => records}) when is_list(records) do
+    {:ok, Enum.map(records, &format_search_contact/1)}
+  end
+
+  defp parse_search_contacts(nil), do: {:ok, []}
+  defp parse_search_contacts(%{} = body) when map_size(body) == 0, do: {:ok, []}
+  defp parse_search_contacts(""), do: {:ok, []}
+
+  defp parse_search_contacts(body) do
+    {:error, {:malformed_response, body}}
   end
 
   defp api_version do
