@@ -12,7 +12,7 @@ defmodule SocialScribe.AIContentGenerator do
   # Use a model with active quota and reasonable rate limits for the project for both local and production traffic.
   # to avoid 429 rate-limit errors
   # if needed select appropriate model with active limits in Google AI Studio as per quota available
-  @gemini_model "gemini-3.1-flash-lite"
+  @gemini_model "gemini-2.5-flash"
   @gemini_api_base_url "https://generativelanguage.googleapis.com/v1beta/models"
 
   @impl SocialScribe.AIContentGeneratorApi
