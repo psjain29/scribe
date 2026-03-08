@@ -8,6 +8,7 @@ defmodule SocialScribe.CRMSuggestions do
   alias SocialScribe.CRMSuggestions.Registry
 
   @unsupported_provider_message "Could not complete CRM action. Only HubSpot and Salesforce are supported right now. Reconnect your CRM account in Settings and try again."
+  @rate_limited_ai_message "AI suggestions are temporarily rate limited. Kindly request at a lower rate or contact app owner."
 
   @type suggestion_row :: %{
           field: String.t(),
@@ -24,6 +25,14 @@ defmodule SocialScribe.CRMSuggestions do
   Returns provider-safe message shown for unsupported provider flows.
   """
   def unsupported_provider_message, do: @unsupported_provider_message
+
+  @doc """
+  Returns a user-friendly message for CRM suggestion generation failures.
+  """
+  def suggestion_generation_error_message({:api_error, 429, _body}, _default_message),
+    do: @rate_limited_ai_message
+
+  def suggestion_generation_error_message(_reason, default_message), do: default_message
 
   @doc """
   Generates suggestion rows for the selected contact from one meeting transcript.

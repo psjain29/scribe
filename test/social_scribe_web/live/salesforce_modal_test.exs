@@ -168,7 +168,8 @@ defmodule SocialScribeWeb.SalesforceModalTest do
       |> render_click()
 
       assert eventually(fn ->
-               render(view) =~ "Failed to load Salesforce contact details. Please try again."
+               render(view) =~
+                 "AI suggestions are temporarily rate limited. Kindly request at a lower rate or contact app owner."
              end)
     end
 

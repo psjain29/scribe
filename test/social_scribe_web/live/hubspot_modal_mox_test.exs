@@ -179,7 +179,10 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
       |> element("button[phx-click='select_contact'][phx-value-id='123']")
       |> render_click()
 
-      assert eventually(fn -> render(view) =~ "Failed to generate suggestions" end)
+      assert eventually(fn ->
+               render(view) =~
+                 "AI suggestions are temporarily rate limited. Kindly request at a lower rate or contact app owner."
+             end)
     end
 
     test "applies selected HubSpot updates and shows success flash", %{

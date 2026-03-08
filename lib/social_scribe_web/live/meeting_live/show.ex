@@ -125,7 +125,11 @@ defmodule SocialScribeWeb.MeetingLive.Show do
       {:error, reason} ->
         send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
           id: "hubspot-modal",
-          error: "Failed to generate suggestions: #{inspect(reason)}",
+          error:
+            CRMSuggestions.suggestion_generation_error_message(
+              reason,
+              "Failed to generate suggestions. Please try again."
+            ),
           loading: false
         )
     end
@@ -256,11 +260,15 @@ defmodule SocialScribeWeb.MeetingLive.Show do
           error: "That Salesforce contact could not be found. Please select another contact."
         )
 
-      {:error, _reason} ->
+      {:error, reason} ->
         send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
           id: "salesforce-modal",
           loading_contact: false,
-          error: "Failed to load Salesforce contact details. Please try again."
+          error:
+            CRMSuggestions.suggestion_generation_error_message(
+              reason,
+              "Failed to load Salesforce contact details. Please try again."
+            )
         )
     end
 

@@ -94,6 +94,14 @@ defmodule SocialScribe.CRMSuggestionsTest do
            }
   end
 
+  test "suggestion_generation_error_message returns user-friendly 429 text" do
+    assert CRMSuggestions.suggestion_generation_error_message({:api_error, 429, %{}}, "fallback") ==
+             "AI suggestions are temporarily rate limited. Kindly request at a lower rate or contact app owner."
+
+    assert CRMSuggestions.suggestion_generation_error_message({:api_error, 500, %{}}, "fallback") ==
+             "fallback"
+  end
+
   test "returns unsupported provider error for unknown providers" do
     assert {:error, {:unsupported_provider, "pipedrive"}} =
              CRMSuggestions.generate_from_meeting("pipedrive", %{id: 1})
