@@ -132,6 +132,148 @@ defmodule SocialScribeWeb.SalesforceModalTest do
              end)
     end
 
+    test "shows inline error when AI suggestion generation fails", %{conn: conn, meeting: meeting} do
+      contacts = [
+        %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
+      ]
+
+      contact = %{
+        id: "0031",
+        name: "Alex Taylor",
+        firstname: "Alex",
+        lastname: "Taylor",
+        email: "alex.taylor@example.test",
+        phone: "555-1000"
+      }
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _credential, _query -> {:ok, contacts} end)
+      |> expect(:get_contact, fn _credential, "0031" -> {:ok, contact} end)
+
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:generate_crm_suggestions, fn "salesforce", _meeting ->
+        {:error, {:api_error, 429, %{}}}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "Alex"})
+
+      :timer.sleep(200)
+
+      view
+      |> element("button[phx-click='select_contact'][phx-value-id='0031']")
+      |> render_click()
+
+      assert eventually(fn ->
+               render(view) =~ "Failed to load Salesforce contact details. Please try again."
+             end)
+    end
+
+    test "applies selected Salesforce updates and shows success flash", %{
+      conn: conn,
+      meeting: meeting
+    } do
+      contacts = [
+        %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
+      ]
+
+      contact = %{
+        id: "0031",
+        name: "Alex Taylor",
+        firstname: "Alex",
+        lastname: "Taylor",
+        email: "alex.taylor@example.test",
+        phone: "555-1000"
+      }
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _credential, _query -> {:ok, contacts} end)
+      |> expect(:get_contact, fn _credential, "0031" -> {:ok, contact} end)
+      |> expect(:update_contact, fn _credential, "0031", payload ->
+        assert payload == %{"Phone" => "555-2000"}
+        {:ok, %{"Id" => "0031", "Phone" => "555-2000"}}
+      end)
+
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:generate_crm_suggestions, fn "salesforce", _meeting ->
+        {:ok, [%{"field" => "phone", "suggested_value" => "555-2000", "reason" => "New number"}]}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "Alex"})
+
+      :timer.sleep(200)
+
+      view
+      |> element("button[phx-click='select_contact'][phx-value-id='0031']")
+      |> render_click()
+
+      assert eventually(fn -> render(view) =~ "555-2000" end)
+
+      view
+      |> element("form[phx-submit='apply_updates']")
+      |> render_submit()
+
+      assert eventually(fn ->
+               render(view) =~ "Successfully updated 1 field(s) in Salesforce"
+             end)
+    end
+
+    test "shows inline error when Salesforce update fails", %{conn: conn, meeting: meeting} do
+      contacts = [
+        %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
+      ]
+
+      contact = %{
+        id: "0031",
+        name: "Alex Taylor",
+        firstname: "Alex",
+        lastname: "Taylor",
+        email: "alex.taylor@example.test",
+        phone: "555-1000"
+      }
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _credential, _query -> {:ok, contacts} end)
+      |> expect(:get_contact, fn _credential, "0031" -> {:ok, contact} end)
+      |> expect(:update_contact, fn _credential, "0031", _payload ->
+        {:error, {:api_error, 500, %{}}}
+      end)
+
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:generate_crm_suggestions, fn "salesforce", _meeting ->
+        {:ok, [%{"field" => "phone", "suggested_value" => "555-2000", "reason" => "New number"}]}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "Alex"})
+
+      :timer.sleep(200)
+
+      view
+      |> element("button[phx-click='select_contact'][phx-value-id='0031']")
+      |> render_click()
+
+      assert eventually(fn -> render(view) =~ "555-2000" end)
+
+      view
+      |> element("form[phx-submit='apply_updates']")
+      |> render_submit()
+
+      assert eventually(fn ->
+               render(view) =~ "Failed to update Salesforce contact. Please try again."
+             end)
+    end
+
     test "shows loading state while search is in flight", %{conn: conn, meeting: meeting} do
       contacts = [
         %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}

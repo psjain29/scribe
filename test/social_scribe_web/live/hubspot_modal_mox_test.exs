@@ -144,6 +144,99 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
       assert has_element?(view, "#hubspot-modal-wrapper")
     end
 
+    test "shows inline error when HubSpot suggestion generation fails", %{
+      conn: conn,
+      meeting: meeting
+    } do
+      mock_contact = %{
+        id: "123",
+        firstname: "John",
+        lastname: "Doe",
+        email: "john@example.com",
+        phone: nil,
+        company: "Acme Corp",
+        display_name: "John Doe"
+      }
+
+      SocialScribe.HubspotApiMock
+      |> expect(:search_contacts, fn _credential, _query -> {:ok, [mock_contact]} end)
+      |> expect(:get_contact, fn _credential, "123" -> {:ok, mock_contact} end)
+
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:generate_crm_suggestions, fn "hubspot", _meeting ->
+        {:error, {:api_error, 429, %{}}}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/hubspot")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "John"})
+
+      :timer.sleep(200)
+
+      view
+      |> element("button[phx-click='select_contact'][phx-value-id='123']")
+      |> render_click()
+
+      assert eventually(fn -> render(view) =~ "Failed to generate suggestions" end)
+    end
+
+    test "applies selected HubSpot updates and shows success flash", %{
+      conn: conn,
+      meeting: meeting
+    } do
+      mock_contact = %{
+        id: "123",
+        firstname: "John",
+        lastname: "Doe",
+        email: "john@example.com",
+        phone: nil,
+        company: "Acme Corp",
+        display_name: "John Doe"
+      }
+
+      SocialScribe.HubspotApiMock
+      |> expect(:search_contacts, fn _credential, _query -> {:ok, [mock_contact]} end)
+      |> expect(:get_contact, fn _credential, "123" -> {:ok, mock_contact} end)
+      |> expect(:update_contact, fn _credential, "123", payload ->
+        assert payload == %{"phone" => "555-1234"}
+        {:ok, Map.merge(mock_contact, %{phone: "555-1234"})}
+      end)
+
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:generate_crm_suggestions, fn "hubspot", _meeting ->
+        {:ok,
+         [
+           %{
+             "field" => "phone",
+             "suggested_value" => "555-1234",
+             "reason" => "Client shared phone"
+           }
+         ]}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/hubspot")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "John"})
+
+      :timer.sleep(200)
+
+      view
+      |> element("button[phx-click='select_contact'][phx-value-id='123']")
+      |> render_click()
+
+      assert eventually(fn -> render(view) =~ "555-1234" end)
+
+      view
+      |> element("form[phx-submit='apply_updates']")
+      |> render_submit()
+
+      assert eventually(fn -> render(view) =~ "Successfully updated 1 field(s) in HubSpot" end)
+    end
+
     test "contact dropdown shows search results", %{conn: conn, meeting: meeting} do
       mock_contact = %{
         id: "789",
@@ -269,5 +362,18 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
     })
 
     SocialScribe.Meetings.get_meeting_with_details(meeting.id)
+  end
+
+  defp eventually(fun, attempts \\ 20)
+
+  defp eventually(_fun, 0), do: false
+
+  defp eventually(fun, attempts) do
+    if fun.() do
+      true
+    else
+      Process.sleep(25)
+      eventually(fun, attempts - 1)
+    end
   end
 end
