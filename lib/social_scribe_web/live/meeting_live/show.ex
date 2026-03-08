@@ -310,11 +310,11 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
             {:noreply, socket}
 
-          {:error, _reason} ->
+          {:error, reason} ->
             send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
               id: "salesforce-modal",
               loading: false,
-              error: "Failed to update Salesforce contact. Please try again."
+              error: salesforce_update_error_message(reason)
             )
 
             {:noreply, socket}
@@ -329,6 +329,62 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
         {:noreply, socket}
     end
+  end
+
+  defp salesforce_update_error_message({:api_error, _status, body}) do
+    case extract_salesforce_error(body) do
+      %{"errorCode" => "DUPLICATE_VALUE"} = error ->
+        case extract_error_field(error) do
+          "Email" ->
+            "Could not update Salesforce: Email is already used by another contact."
+
+          field when is_binary(field) ->
+            "Could not update Salesforce: #{field} is already used by another record."
+
+          _ ->
+            "Could not update Salesforce: one selected value is already used by another record."
+        end
+
+      %{"errorCode" => "INVALID_FIELD_FOR_INSERT_UPDATE"} = error ->
+        case extract_error_field(error) do
+          field when is_binary(field) ->
+            "Could not update Salesforce: #{field} cannot be updated."
+
+          _ ->
+            "Could not update Salesforce: one selected field cannot be updated."
+        end
+
+      %{"errorCode" => "REQUIRED_FIELD_MISSING"} = error ->
+        case extract_error_field(error) do
+          field when is_binary(field) -> "Could not update Salesforce: #{field} is required."
+          _ -> "Could not update Salesforce: a required field is missing."
+        end
+
+      _ ->
+        "Failed to update Salesforce contact. Please try again."
+    end
+  end
+
+  defp salesforce_update_error_message(_reason),
+    do: "Failed to update Salesforce contact. Please try again."
+
+  defp extract_salesforce_error([%{} = first | _]), do: first
+  defp extract_salesforce_error(%{"errorCode" => _} = error), do: error
+  defp extract_salesforce_error(%{"errors" => [%{} = first | _]}), do: first
+  defp extract_salesforce_error(_), do: nil
+
+  defp extract_error_field(%{"fields" => [field | _]}) when is_binary(field),
+    do: humanize_field_name(field)
+
+  defp extract_error_field(_), do: nil
+
+  defp humanize_field_name(field), do: field |> Macro.underscore() |> humanize_snake_case()
+
+  defp humanize_snake_case(value) do
+    value
+    |> String.replace("_", " ")
+    |> String.downcase()
+    |> String.capitalize()
   end
 
   defp format_duration(nil), do: "N/A"

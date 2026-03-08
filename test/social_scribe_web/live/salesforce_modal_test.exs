@@ -274,6 +274,72 @@ defmodule SocialScribeWeb.SalesforceModalTest do
              end)
     end
 
+    test "shows duplicate value message when Salesforce reports duplicate email", %{
+      conn: conn,
+      meeting: meeting
+    } do
+      error =
+        {:api_error, 400,
+         [
+           %{
+             "errorCode" => "DUPLICATE_VALUE",
+             "fields" => ["Email"],
+             "message" => "Email already exists"
+           }
+         ]}
+
+      assert_salesforce_update_error(
+        conn,
+        meeting,
+        error,
+        "Could not update Salesforce: Email is already used by another contact."
+      )
+    end
+
+    test "shows invalid field update message when Salesforce reports non-updatable field", %{
+      conn: conn,
+      meeting: meeting
+    } do
+      error =
+        {:api_error, 400,
+         [
+           %{
+             "errorCode" => "INVALID_FIELD_FOR_INSERT_UPDATE",
+             "fields" => ["Phone"],
+             "message" => "Field is not writeable"
+           }
+         ]}
+
+      assert_salesforce_update_error(
+        conn,
+        meeting,
+        error,
+        "Could not update Salesforce: Phone cannot be updated."
+      )
+    end
+
+    test "shows required field missing message when Salesforce reports missing field", %{
+      conn: conn,
+      meeting: meeting
+    } do
+      error =
+        {:api_error, 400,
+         [
+           %{
+             "errorCode" => "REQUIRED_FIELD_MISSING",
+             "fields" => ["LastName"],
+             "message" => "Required fields are missing"
+           }
+         ]}
+
+      assert_salesforce_update_error(
+        conn,
+        meeting,
+        error,
+        "Could not update Salesforce: Last name is required."
+      )
+    end
+
     test "shows loading state while search is in flight", %{conn: conn, meeting: meeting} do
       contacts = [
         %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
@@ -368,6 +434,51 @@ defmodule SocialScribeWeb.SalesforceModalTest do
       refute html =~ "salesforce-modal-wrapper"
       refute html =~ "Update in Salesforce"
     end
+  end
+
+  defp assert_salesforce_update_error(conn, meeting, update_error, expected_message) do
+    contacts = [
+      %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
+    ]
+
+    contact = %{
+      id: "0031",
+      name: "Alex Taylor",
+      firstname: "Alex",
+      lastname: "Taylor",
+      email: "alex.taylor@example.test",
+      phone: "555-1000"
+    }
+
+    SocialScribe.SalesforceApiMock
+    |> expect(:search_contacts, fn _credential, _query -> {:ok, contacts} end)
+    |> expect(:get_contact, fn _credential, "0031" -> {:ok, contact} end)
+    |> expect(:update_contact, fn _credential, "0031", _payload -> {:error, update_error} end)
+
+    SocialScribe.AIContentGeneratorMock
+    |> expect(:generate_crm_suggestions, fn "salesforce", _meeting ->
+      {:ok, [%{"field" => "phone", "suggested_value" => "555-2000", "reason" => "New number"}]}
+    end)
+
+    {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+
+    view
+    |> element("input[phx-keyup='contact_search']")
+    |> render_keyup(%{"value" => "Alex"})
+
+    :timer.sleep(200)
+
+    view
+    |> element("button[phx-click='select_contact'][phx-value-id='0031']")
+    |> render_click()
+
+    assert eventually(fn -> render(view) =~ "555-2000" end)
+
+    view
+    |> element("form[phx-submit='apply_updates']")
+    |> render_submit()
+
+    assert eventually(fn -> render(view) =~ expected_message end)
   end
 
   defp meeting_fixture_with_transcript(user) do
