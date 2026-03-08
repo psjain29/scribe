@@ -12,7 +12,8 @@ defmodule SocialScribe.AIContentGenerator do
   # gemini-2.5-flash is used because gemini-2.0-flash-lite returned 0 free-tier quota
   # and frequent 429 rate-limit errors in this region/project during local validation.
   # if needed select appropriate model with active limits in Google AI Studio as per quota available
-  @gemini_model "gemini-2.5-flash"
+  #todo update back to models that are not rate limited - once manual QA done
+  @gemini_model "gemini-2.0-flash-lite"
   @gemini_api_base_url "https://generativelanguage.googleapis.com/v1beta/models"
 
   @impl SocialScribe.AIContentGeneratorApi
