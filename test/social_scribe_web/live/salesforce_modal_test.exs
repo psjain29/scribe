@@ -69,7 +69,7 @@ defmodule SocialScribeWeb.SalesforceModalTest do
       assert render(view) =~ "Please enter at least 2 characters to search."
     end
 
-    test "selecting a contact fetches details and renders pending rows", %{
+    test "selecting a contact fetches details and renders suggestion rows", %{
       conn: conn,
       meeting: meeting
     } do
@@ -100,52 +100,18 @@ defmodule SocialScribeWeb.SalesforceModalTest do
         {:ok, contact}
       end)
 
-      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+      SocialScribe.AIContentGeneratorMock
+      |> expect(:generate_crm_suggestions, fn provider, _meeting ->
+        assert provider == "salesforce"
 
-      view
-      |> element("input[phx-keyup='contact_search']")
-      |> render_keyup(%{"value" => "Alex"})
-
-      :timer.sleep(200)
-
-      view
-      |> element("button[phx-click='select_contact'][phx-value-id='0031']")
-      |> render_click()
-
-      :timer.sleep(200)
-
-      html = render(view)
-      assert html =~ "First Name"
-      assert html =~ "Pending AI suggestion"
-      assert html =~ "Update Salesforce"
-    end
-
-    test "shows loading state while contact fetch is in flight", %{conn: conn, meeting: meeting} do
-      contacts = [
-        %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
-      ]
-
-      contact = %{
-        id: "0031",
-        name: "Alex Taylor",
-        firstname: "Alex",
-        lastname: "Taylor",
-        email: "alex.taylor@example.test",
-        phone: "555-1000",
-        mobilephone: nil,
-        title: nil,
-        mailing_street: nil,
-        mailing_city: nil,
-        mailing_state: nil,
-        mailing_postal_code: nil,
-        mailing_country: nil
-      }
-
-      SocialScribe.SalesforceApiMock
-      |> expect(:search_contacts, fn _credential, _query -> {:ok, contacts} end)
-      |> expect(:get_contact, fn _credential, _contact_id ->
-        Process.sleep(200)
-        {:ok, contact}
+        {:ok,
+         [
+           %{
+             "field" => "phone",
+             "suggested_value" => "555-2000",
+             "reason" => "Client shared a new phone number"
+           }
+         ]}
       end)
 
       {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
@@ -160,10 +126,31 @@ defmodule SocialScribeWeb.SalesforceModalTest do
       |> element("button[phx-click='select_contact'][phx-value-id='0031']")
       |> render_click()
 
-      assert render(view) =~ "Loading contact details..."
+      assert eventually(fn ->
+               html = render(view)
+               html =~ "Phone" and html =~ "555-2000" and html =~ "Update Salesforce"
+             end)
+    end
 
-      :timer.sleep(250)
-      refute render(view) =~ "Loading contact details..."
+    test "shows loading state while search is in flight", %{conn: conn, meeting: meeting} do
+      contacts = [
+        %{id: "0031", name: "Alex Taylor", email: "alex.taylor@example.test", phone: "555-1000"}
+      ]
+
+      SocialScribe.SalesforceApiMock
+      |> expect(:search_contacts, fn _credential, _query ->
+        Process.sleep(250)
+        {:ok, contacts}
+      end)
+
+      {:ok, view, _html} = live(conn, ~p"/dashboard/meetings/#{meeting.id}/salesforce")
+
+      view
+      |> element("input[phx-keyup='contact_search']")
+      |> render_keyup(%{"value" => "Alex"})
+
+      assert eventually(fn -> render(view) =~ "Searching..." end)
+      assert eventually(fn -> render(view) =~ "Alex Taylor" end)
     end
 
     test "renders inline error and remains interactive after search failure", %{
@@ -242,5 +229,18 @@ defmodule SocialScribeWeb.SalesforceModalTest do
     })
 
     SocialScribe.Meetings.get_meeting_with_details(meeting.id)
+  end
+
+  defp eventually(fun, attempts \\ 20)
+
+  defp eventually(_fun, 0), do: false
+
+  defp eventually(fun, attempts) do
+    if fun.() do
+      true
+    else
+      Process.sleep(25)
+      eventually(fun, attempts - 1)
+    end
   end
 end

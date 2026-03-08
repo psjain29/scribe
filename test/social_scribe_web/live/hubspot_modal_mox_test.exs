@@ -111,10 +111,15 @@ defmodule SocialScribeWeb.HubspotModalMoxTest do
       |> expect(:search_contacts, fn _credential, _query ->
         {:ok, [mock_contact]}
       end)
+      |> expect(:get_contact, fn _credential, contact_id ->
+        assert contact_id == "123"
+        {:ok, mock_contact}
+      end)
 
       # Also need to mock the AI content generator for suggestions
       SocialScribe.AIContentGeneratorMock
-      |> expect(:generate_hubspot_suggestions, fn _meeting ->
+      |> expect(:generate_crm_suggestions, fn provider, _meeting ->
+        assert provider == "hubspot"
         {:ok, mock_suggestions}
       end)
 

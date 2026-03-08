@@ -9,22 +9,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
   alias SocialScribe.Automations
   alias SocialScribe.Accounts
   alias SocialScribe.CRM
-  alias SocialScribe.HubspotApiBehaviour, as: HubspotApi
-  alias SocialScribe.HubspotSuggestions
-
-  @salesforce_pending_fields [
-    {"firstname", "First Name", :firstname},
-    {"lastname", "Last Name", :lastname},
-    {"email", "Email", :email},
-    {"phone", "Phone", :phone},
-    {"mobilephone", "Mobile Phone", :mobilephone},
-    {"title", "Title", :title},
-    {"mailing_street", "Mailing Street", :mailing_street},
-    {"mailing_city", "Mailing City", :mailing_city},
-    {"mailing_state", "Mailing State", :mailing_state},
-    {"mailing_postal_code", "Mailing Postal Code", :mailing_postal_code},
-    {"mailing_country", "Mailing Country", :mailing_country}
-  ]
+  alias SocialScribe.CRMSuggestions
 
   @impl true
   def mount(%{"id" => meeting_id}, _session, socket) do
@@ -100,7 +85,7 @@ defmodule SocialScribeWeb.MeetingLive.Show do
 
   @impl true
   def handle_info({:hubspot_search, query, credential}, socket) do
-    case HubspotApi.search_contacts(credential, query) do
+    case CRM.search_contacts(credential, query) do
       {:ok, contacts} ->
         send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
           id: "hubspot-modal",
@@ -120,15 +105,20 @@ defmodule SocialScribeWeb.MeetingLive.Show do
   end
 
   @impl true
-  def handle_info({:generate_suggestions, contact, meeting, _credential}, socket) do
-    case HubspotSuggestions.generate_suggestions_from_meeting(meeting) do
-      {:ok, suggestions} ->
-        merged = HubspotSuggestions.merge_with_contact(suggestions, normalize_contact(contact))
-
+  def handle_info({:generate_suggestions, contact, meeting, credential}, socket) do
+    case CRMSuggestions.generate_for_contact(credential.provider, credential, contact.id, meeting) do
+      {:ok, %{suggestion_rows: suggestion_rows}} ->
         send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
           id: "hubspot-modal",
           step: :suggestions,
-          suggestions: merged,
+          suggestions: suggestion_rows,
+          loading: false
+        )
+
+      {:error, {:unsupported_provider, _provider}} ->
+        send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
+          id: "hubspot-modal",
+          error: CRMSuggestions.unsupported_provider_message(),
           loading: false
         )
 
@@ -144,20 +134,59 @@ defmodule SocialScribeWeb.MeetingLive.Show do
   end
 
   @impl true
-  def handle_info({:apply_hubspot_updates, updates, contact, credential}, socket) do
-    case HubspotApi.update_contact(credential, contact.id, updates) do
-      {:ok, _updated_contact} ->
-        socket =
-          socket
-          |> put_flash(:info, "Successfully updated #{map_size(updates)} field(s) in HubSpot")
-          |> push_patch(to: ~p"/dashboard/meetings/#{socket.assigns.meeting}")
+  def handle_info({:apply_hubspot_updates, suggestion_rows, contact, credential}, socket) do
+    case CRMSuggestions.build_update_payload(credential.provider, suggestion_rows) do
+      {:ok, payload} when map_size(payload) == 0 ->
+        send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
+          id: "hubspot-modal",
+          error: "Please select at least one changed field to update.",
+          loading: false
+        )
 
         {:noreply, socket}
 
-      {:error, reason} ->
+      {:ok, payload} ->
+        case CRM.update_contact(credential, contact.id, payload) do
+          {:ok, _updated_contact} ->
+            socket =
+              socket
+              |> put_flash(:info, "Successfully updated #{map_size(payload)} field(s) in HubSpot")
+              |> push_patch(to: ~p"/dashboard/meetings/#{socket.assigns.meeting}")
+
+            {:noreply, socket}
+
+          {:error, :not_found} ->
+            send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
+              id: "hubspot-modal",
+              error: "That HubSpot contact could not be found. Please select another contact.",
+              loading: false
+            )
+
+            {:noreply, socket}
+
+          {:error, {:unsupported_provider, _provider}} ->
+            send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
+              id: "hubspot-modal",
+              error: CRMSuggestions.unsupported_provider_message(),
+              loading: false
+            )
+
+            {:noreply, socket}
+
+          {:error, _reason} ->
+            send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
+              id: "hubspot-modal",
+              error: "Failed to update HubSpot contact. Please try again.",
+              loading: false
+            )
+
+            {:noreply, socket}
+        end
+
+      {:error, {:unsupported_provider, _provider}} ->
         send_update(SocialScribeWeb.MeetingLive.HubspotModalComponent,
           id: "hubspot-modal",
-          error: "Failed to update contact: #{inspect(reason)}",
+          error: CRMSuggestions.unsupported_provider_message(),
           loading: false
         )
 
@@ -189,15 +218,27 @@ defmodule SocialScribeWeb.MeetingLive.Show do
   end
 
   @impl true
-  def handle_info({:salesforce_load_contact, contact_id, credential}, socket) do
-    case CRM.get_contact(credential, contact_id) do
-      {:ok, contact} ->
+  def handle_info({:salesforce_generate_suggestions, contact_id, credential}, socket) do
+    case CRMSuggestions.generate_for_contact(
+           credential.provider,
+           credential,
+           contact_id,
+           socket.assigns.meeting
+         ) do
+      {:ok, %{contact: contact, suggestion_rows: suggestion_rows}} ->
         send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
           id: "salesforce-modal",
           selected_contact: contact,
-          pending_rows: build_salesforce_pending_rows(contact),
+          suggestion_rows: suggestion_rows,
           loading_contact: false,
           error: nil
+        )
+
+      {:error, {:unsupported_provider, _provider}} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          loading_contact: false,
+          error: CRMSuggestions.unsupported_provider_message()
         )
 
       {:error, :not_found} ->
@@ -218,24 +259,68 @@ defmodule SocialScribeWeb.MeetingLive.Show do
     {:noreply, socket}
   end
 
-  # Builds deterministic pending rows for the Salesforce review modal.
-  defp build_salesforce_pending_rows(contact) do
-    Enum.map(@salesforce_pending_fields, fn {field, label, contact_key} ->
-      %{
-        field: field,
-        label: label,
-        existing_value: Map.get(contact, contact_key),
-        suggested_value: nil,
-        reason: nil,
-        apply: false,
-        status: :pending
-      }
-    end)
-  end
+  @impl true
+  def handle_info({:apply_salesforce_updates, suggestion_rows, contact, credential}, socket) do
+    case CRMSuggestions.build_update_payload(credential.provider, suggestion_rows) do
+      {:ok, payload} when map_size(payload) == 0 ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          loading: false,
+          error: "Please select at least one changed field to update."
+        )
 
-  defp normalize_contact(contact) do
-    # Contact is already formatted with atom keys from HubspotApi.format_contact
-    contact
+        {:noreply, socket}
+
+      {:ok, payload} ->
+        case CRM.update_contact(credential, contact.id, payload) do
+          {:ok, _updated_contact} ->
+            socket =
+              socket
+              |> put_flash(
+                :info,
+                "Successfully updated #{map_size(payload)} field(s) in Salesforce"
+              )
+              |> push_patch(to: ~p"/dashboard/meetings/#{socket.assigns.meeting}")
+
+            {:noreply, socket}
+
+          {:error, :not_found} ->
+            send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+              id: "salesforce-modal",
+              loading: false,
+              error: "That Salesforce contact could not be found. Please select another contact."
+            )
+
+            {:noreply, socket}
+
+          {:error, {:unsupported_provider, _provider}} ->
+            send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+              id: "salesforce-modal",
+              loading: false,
+              error: CRMSuggestions.unsupported_provider_message()
+            )
+
+            {:noreply, socket}
+
+          {:error, _reason} ->
+            send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+              id: "salesforce-modal",
+              loading: false,
+              error: "Failed to update Salesforce contact. Please try again."
+            )
+
+            {:noreply, socket}
+        end
+
+      {:error, {:unsupported_provider, _provider}} ->
+        send_update(SocialScribeWeb.MeetingLive.SalesforceModalComponent,
+          id: "salesforce-modal",
+          loading: false,
+          error: CRMSuggestions.unsupported_provider_message()
+        )
+
+        {:noreply, socket}
+    end
   end
 
   defp format_duration(nil), do: "N/A"

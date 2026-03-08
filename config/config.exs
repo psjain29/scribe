@@ -108,6 +108,11 @@ config :ueberauth, Ueberauth,
        ]}
   ]
 
+config :social_scribe, :crm_suggestion_strategies, %{
+  "hubspot" => SocialScribe.CRMSuggestions.Strategies.Hubspot,
+  "salesforce" => SocialScribe.CRMSuggestions.Strategies.Salesforce
+}
+
 # Import environment specific config. This must remain at the bottom
 # of this file so it overrides the configuration defined above.
 import_config "#{config_env()}.exs"

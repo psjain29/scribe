@@ -1,9 +1,6 @@
 defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
   @moduledoc """
-  Salesforce contact review modal shell.
-
-  Handles contact search/select and renders pending CRM rows before
-  suggestion generation and update submission are enabled.
+  Salesforce contact review modal with suggestion selection and update flow.
   """
 
   use SocialScribeWeb, :live_component
@@ -20,9 +17,10 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
       |> assign_new(:query, fn -> "" end)
       |> assign_new(:contacts, fn -> [] end)
       |> assign_new(:selected_contact, fn -> nil end)
-      |> assign_new(:pending_rows, fn -> [] end)
+      |> assign_new(:suggestion_rows, fn -> [] end)
       |> assign_new(:searching, fn -> false end)
       |> assign_new(:loading_contact, fn -> false end)
+      |> assign_new(:loading, fn -> false end)
       |> assign_new(:dropdown_open, fn -> false end)
       |> assign_new(:error, fn -> nil end)
 
@@ -32,7 +30,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
   @impl true
   def render(assigns) do
     assigns = assign(assigns, :patch, ~p"/dashboard/meetings/#{assigns.meeting}")
-    assigns = assign(assigns, :selected_count, Enum.count(assigns.pending_rows, & &1.apply))
+    assigns = assign(assigns, :selected_count, Enum.count(assigns.suggestion_rows, & &1.apply))
     assigns = assign(assigns, :min_query_length, @min_query_length)
 
     ~H"""
@@ -68,18 +66,28 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
               <p>Loading contact details...</p>
             </div>
           <% else %>
-            <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
-              <.pending_row_card :for={row <- @pending_rows} row={row} />
-            </div>
+            <%= if Enum.empty?(@suggestion_rows) do %>
+              <.empty_state
+                message="No update suggestions found from this meeting."
+                submessage="The AI didn't detect any new Salesforce contact information in the transcript."
+              />
+            <% else %>
+              <form phx-submit="apply_updates" phx-change="toggle_suggestion" phx-target={@myself}>
+                <div class="space-y-4 max-h-[60vh] overflow-y-auto pr-2">
+                  <.suggestion_row_card :for={row <- @suggestion_rows} row={row} />
+                </div>
 
-            <.modal_footer
-              cancel_patch={@patch}
-              submit_text="Update Salesforce"
-              submit_class="bg-green-600 hover:bg-green-700"
-              disabled={true}
-              loading={false}
-              info_text={"1 object, #{@selected_count} fields in 1 integration selected to update"}
-            />
+                <.modal_footer
+                  cancel_patch={@patch}
+                  submit_text="Update Salesforce"
+                  submit_class="bg-green-600 hover:bg-green-700"
+                  disabled={@selected_count == 0 || @loading}
+                  loading={@loading}
+                  loading_text="Updating..."
+                  info_text={"1 object, #{@selected_count} fields in 1 integration selected to update"}
+                />
+              </form>
+            <% end %>
           <% end %>
         </div>
       <% end %>
@@ -115,7 +123,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
 
   @impl true
   def handle_event("select_contact", %{"id" => contact_id}, socket) do
-    send(self(), {:salesforce_load_contact, contact_id, socket.assigns.credential})
+    send(self(), {:salesforce_generate_suggestions, contact_id, socket.assigns.credential})
 
     {:noreply,
      assign(socket,
@@ -123,8 +131,9 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
          id: contact_id,
          name: display_name_for_contact(contact_id, socket.assigns.contacts)
        },
-       pending_rows: [],
+       suggestion_rows: [],
        loading_contact: true,
+       loading: false,
        dropdown_open: false,
        query: "",
        error: nil
@@ -136,13 +145,48 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
     {:noreply,
      assign(socket,
        selected_contact: nil,
-       pending_rows: [],
+       suggestion_rows: [],
        loading_contact: false,
+       loading: false,
        query: "",
        contacts: [],
        dropdown_open: false,
        error: nil
      )}
+  end
+
+  @impl true
+  def handle_event("toggle_suggestion", params, socket) do
+    applied_fields = Map.get(params, "apply", %{})
+    values = Map.get(params, "values", %{})
+    checked_fields = Map.keys(applied_fields)
+
+    suggestion_rows =
+      Enum.map(socket.assigns.suggestion_rows, fn row ->
+        apply? = row.field in checked_fields
+        suggested_value = Map.get(values, row.field, row.suggested_value || "")
+
+        row
+        |> Map.put(:apply, apply?)
+        |> Map.put(:suggested_value, suggested_value)
+        |> Map.put(
+          :has_change,
+          normalize_value(row.existing_value) != normalize_value(suggested_value)
+        )
+      end)
+
+    {:noreply, assign(socket, suggestion_rows: suggestion_rows)}
+  end
+
+  @impl true
+  def handle_event("apply_updates", _params, socket) do
+    send(
+      self(),
+      {:apply_salesforce_updates, socket.assigns.suggestion_rows, socket.assigns.selected_contact,
+       socket.assigns.credential}
+    )
+
+    {:noreply, assign(socket, loading: true, error: nil)}
   end
 
   @impl true
@@ -308,7 +352,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
 
   attr :row, :map, required: true
 
-  defp pending_row_card(assigns) do
+  defp suggestion_row_card(assigns) do
     ~H"""
     <div class="bg-hubspot-card rounded-2xl p-6 mb-4">
       <div class="flex items-start justify-between">
@@ -317,8 +361,8 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
             <input
               type="checkbox"
               checked={@row.apply}
-              disabled
-              class="h-4 w-4 rounded-[3px] border-slate-300 text-hubspot-checkbox accent-hubspot-checkbox focus:ring-0 focus:ring-offset-0 cursor-not-allowed opacity-60"
+              phx-click={JS.dispatch("click", to: "#salesforce-apply-#{@row.field}")}
+              class="h-4 w-4 rounded-[3px] border-slate-300 text-hubspot-checkbox accent-hubspot-checkbox focus:ring-0 focus:ring-offset-0 cursor-pointer"
             />
           </div>
           <div class="text-sm font-semibold text-slate-900 leading-5">{@row.label}</div>
@@ -341,6 +385,15 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
         <div class="text-sm font-medium text-slate-700 leading-5 ml-1">{@row.label}</div>
 
         <div class="relative mt-2">
+          <input
+            id={"salesforce-apply-#{@row.field}"}
+            type="checkbox"
+            name={"apply[#{@row.field}]"}
+            value="1"
+            checked={@row.apply}
+            class="absolute -left-8 top-1/2 -translate-y-1/2 h-4 w-4 rounded-[3px] border-slate-300 text-hubspot-checkbox accent-hubspot-checkbox focus:ring-0 focus:ring-offset-0 cursor-pointer"
+          />
+
           <div class="grid grid-cols-[1fr_32px_1fr] items-center gap-6">
             <input
               type="text"
@@ -362,10 +415,10 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
 
             <input
               type="text"
-              readonly
-              value=""
-              placeholder="Pending AI suggestion"
-              class="block w-full shadow-sm text-sm text-slate-500 bg-white border border-hubspot-input rounded-[7px] py-1.5 px-2"
+              name={"values[#{@row.field}]"}
+              value={@row.suggested_value || ""}
+              placeholder="No suggested value"
+              class="block w-full shadow-sm text-sm text-slate-900 bg-white border border-hubspot-input rounded-[7px] py-1.5 px-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
         </div>
@@ -379,7 +432,7 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
           </button>
           <span></span>
           <span class="text-xs text-slate-500 justify-self-start">
-            Suggestions will appear after AI review
+            {@row.reason || "Suggested from meeting transcript"}
           </span>
         </div>
       </div>
@@ -428,4 +481,17 @@ defmodule SocialScribeWeb.MeetingLive.SalesforceModalComponent do
       contact -> contact.name || "Selected Contact"
     end
   end
+
+  defp normalize_value(nil), do: nil
+
+  defp normalize_value(value) when is_binary(value) do
+    value
+    |> String.trim()
+    |> case do
+      "" -> nil
+      trimmed -> trimmed
+    end
+  end
+
+  defp normalize_value(value), do: value
 end
