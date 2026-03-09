@@ -46,5 +46,5 @@ The branch delivered a full Salesforce vertical slice, preserved HubSpot behavio
 
 ## Quality Signal
 - Automated tests and regressions were run repeatedly during implementation.
-- Full-suite pass confirmed locally (`mix test`: `263 tests`, `0 failures`, captured during Step 8 verification).
+- Full-suite pass confirmed locally (`mix test`: `270 tests`, `0 failures`, captured during Step 8 verification).
 - Architecture and deployment documentation now support fast reviewer onboarding and reproducible validation.
