@@ -3,26 +3,48 @@
 This checklist tracks delivery for the Salesforce CRM integration challenge.
 
 ## Current Status
-- [x] Confirm correct challenge baseline repo (`atomkirk/scribe` fork)
-- [x] Local app bootstrapped and Google login validated
-- [ ] Docs bootstrap and setup cleanup
-- [ ] Micro CRM backend seam
-- [ ] Salesforce credential persistence + OAuth
-- [ ] Salesforce API adapter (search/get/update + token refresh)
-- [ ] Salesforce meeting modal flow
-- [ ] AI suggestion contract + merge safety
-- [ ] Salesforce tests + HubSpot regression tests
-- [ ] Deploy smoke checklist and final documentation
+The branch delivered a full Salesforce vertical slice, preserved HubSpot behavior, added extensibility seams for future CRMs, and tightened reliability/docs for handoff quality.
 
-## Locked Design Constraints
-- Keep scope tight: backend seam only, no generic CRM UI rewrite in this iteration.
-- Reuse existing HubSpot UX patterns for Salesforce modal interactions.
-- Enforce OAuth state validation and strict field allowlist for updates.
-- Use small, reviewable commits and preserve existing HubSpot behavior.
+- [Done] Confirm correct challenge baseline repo (`atomkirk/scribe` fork)
+- [Done] Local app bootstrapped and Google login validated
+- [Done] Docs bootstrap and setup cleanup
+- [Done] Micro CRM backend seam
+- [Done] Salesforce credential persistence + OAuth
+- [Done] Salesforce API adapter (search/get/update + token refresh)
+- [Done] Salesforce meeting modal flow
+- [Done] AI suggestion contract + merge safety
+- [Done] Salesforce tests + HubSpot regression tests
+- [Done] Deploy smoke checklist and final documentation
+
+## Delivery Highlights
+- Added Salesforce OAuth connection in Settings with failure-safe callback handling.
+- Added Salesforce CRM adapter with search/get/update and token refresh retry behavior.
+- Implemented Salesforce modal flow in meeting details with search/select, suggestion rows, and update action.
+- Unified HubSpot + Salesforce suggestion orchestration with strategy registry for future CRM extensibility.
+- Hardened user-safe error handling for OAuth/API/AI edge cases.
+- Added deployment and smoke-test runbooks (agnostic + Railway + Fly.io + Gigalixir).
+
+## Locked Design Constraints (Maintained, Extensible, HubSpot-Safe)
+- Extensibility was added via stable seams, not rewrites:
+  - `CRM` facade + `ProviderBehaviour` for provider-specific data-plane logic.
+  - `CRMSuggestions` + strategy registry for provider-specific AI/field mapping logic.
+- Existing HubSpot user flow was intentionally preserved:
+  - No broad HubSpot UI rewrite.
+  - Existing modal behavior/copy patterns retained while Salesforce was added in parallel.
+- Regression protection was explicit:
+  - HubSpot critical paths were repeatedly re-tested while introducing Salesforce features.
+  - Salesforce was introduced as a vertical slice without changing HubSpot contract shape at the boundary.
+- Scope stayed controlled:
+  - Minimal extension points only (provider adapter + strategy registration) to support future CRMs with low churn.
 
 ## Acceptance Summary
-- Salesforce can be connected from Settings via OAuth.
-- Salesforce contact search/select works from meeting details modal.
-- AI suggestions show existing vs suggested values by field.
-- Selected allowlisted fields update Salesforce successfully.
-- Existing HubSpot flow remains functional.
+- [Done] Salesforce can be connected from Settings via OAuth.
+- [Done] Salesforce contact search/select works from meeting details modal.
+- [Done] AI suggestions show existing vs suggested values by field.
+- [Done] Selected allowlisted fields update Salesforce successfully.
+- [Done] Existing HubSpot flow remains functional.
+
+## Quality Signal
+- Automated tests and regressions were run repeatedly during implementation.
+- Full-suite pass confirmed locally (`mix test`: `263 tests`, `0 failures`, captured during Step 8 verification).
+- Architecture and deployment documentation now support fast reviewer onboarding and reproducible validation.
