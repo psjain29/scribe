@@ -79,22 +79,16 @@ PHX_SERVER=true _build/prod/rel/social_scribe/bin/social_scribe start
 
 ## 6) Evidence Template (Capture for Submission)
 
-### Screenshots
-- [ ] Settings page showing Google + HubSpot + Salesforce connected
-- [ ] Salesforce modal with suggestion rows
-- [ ] Salesforce update success flash
-- [ ] HubSpot modal still working (regression proof)
+### Video proof
+- [Done] One end-to-end video for Salesforce flow (connect -> search/select -> suggestions -> update success)
+- [Done] One end-to-end video for HubSpot regression flow (search/select -> update success)
+- [Done] Video clearly shows deployed app URL in browser address bar
 
 ### Terminal proof
-- [ ] `mix test` output with `0 failures`
-- [ ] Any focused regression suites used
-
-### IDs for reproducibility
-- Meeting ID tested:
-- Salesforce contact ID tested:
-- HubSpot contact ID tested:
+- [Done] `mix test` output with `0 failures`
+- [Done] Any focused regression suites used
 
 ### Final submission checklist
-- [ ] Public repo URL ready
-- [ ] Deployed app URL ready
-- [ ] Both links verified from incognito browser
+- [Done] Public repo URL ready
+- [Done] Deployed app URL ready
+- [Done] Both links verified from incognito browser

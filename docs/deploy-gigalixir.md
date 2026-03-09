@@ -55,7 +55,7 @@ Update provider consoles:
 3. Open one meeting with transcript.
 4. Execute Salesforce update flow and verify CRM update.
 5. Execute HubSpot update flow and verify CRM update.
-6. Keep screenshot and terminal evidence for submission.
+6. Keep video proof and terminal evidence for submission.
 
 ## 8) Common triage
 - OAuth redirect mismatch: recheck callback URL and env vars.
